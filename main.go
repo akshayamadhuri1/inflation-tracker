@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
+	"github.com/golang-sql/civil"
 	"github.com/joho/godotenv"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -16,12 +16,11 @@ import (
 )
 
 func main() {
-	
+
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
-
 
 	privateKey := os.Getenv("PRIVATE_KEY")
 	if privateKey == "" {
@@ -29,7 +28,6 @@ func main() {
 	}
 
 	ctx := context.Background()
-
 
 	pk, err := crypto.Secp256k1PrivateKeyFromHex(privateKey)
 	if err != nil {
@@ -43,24 +41,31 @@ func main() {
 	}
 
 	// Generate a Stream ID or use an existing one
-	streamId := util.GenerateStreamId("TRUUK") // Replace with your stream name
-	streamLocator := tnClient.OwnStreamLocator(streamId)
+	streamId := util.GenerateStreamId("stf37ad83c0b92c7419925b7633c0e62") // Replace with your stream name
+	streamLocator := types.StreamLocator{
+		StreamId: streamId,
+		DataProvider: func() util.EthereumAddress {
+			address, err := util.NewEthereumAddressFromString("0x4710a8d8f0d845da110086812a32de6d90d7ff5c")
+			if err != nil {
+				log.Fatalf("Failed to get address: %v", err)
+			}
+			return address
+		}(),
+	}
 
 	// Load Primitive Actions
-	primitiveActions, err := tnClient.LoadPrimitiveActions()
+	primitiveActions, err := tnClient.LoadComposedStream(streamLocator)
 	if err != nil {
 		log.Fatalf("Failed to load primitive actions: %v", err)
 	}
 
 	// Fetch and display inflation data using timestamps
-	dateFrom := int(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC).Unix()) // Convert date to UNIX timestamp
-	dateTo := int(time.Date(2023, 1, 31, 23, 59, 59, 0, time.UTC).Unix())
+	dateFrom := civil.Date{Year: 2023, Month: 1, Day: 1}
+	dateTo := civil.Date{Year: 2023, Month: 1, Day: 31}
 
 	records, err := primitiveActions.GetRecord(ctx, types.GetRecordInput{
-		DataProvider: streamLocator.DataProvider.Address(), 
-		StreamId:     streamLocator.StreamId.String(),      
-		From:         &dateFrom,                            
-		To:           &dateTo,                            
+		DateFrom: &dateFrom,
+		DateTo:   &dateTo,
 	})
 	if err != nil {
 		log.Fatalf("Failed to fetch inflation data: %v", err)
@@ -69,6 +74,6 @@ func main() {
 	// Print the fetched data
 	fmt.Println("Inflation Data:")
 	for _, record := range records {
-		fmt.Printf("Date (Timestamp): %d, Value: %s\n", record.EventTime, record.Value.String())
+		fmt.Printf("Date (String): %d, Value: %s\n", record.DateValue, record.Value.String())
 	}
 }
